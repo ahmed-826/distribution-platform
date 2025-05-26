@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  superAdmin
+  admin
+  user
+}
+
+enum UserStatus {
+  active
+  banned
+  deleted
+}
+
+// Models
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  username     String     @unique @db.VarChar(32)
+  password     String     @db.VarChar(64)
+  role         UserRole   @default(user)
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  createdById  String?    @db.Uuid
+  createdBy    User?      @relation("CreatedUsers", fields: [createdById], references: [id])
+  createdUsers User[]     @relation("CreatedUsers")
+}
