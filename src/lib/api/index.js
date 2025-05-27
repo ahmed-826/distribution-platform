@@ -17,7 +17,7 @@ export class HttpError extends Error {
 }
 
 export const getUserId = () => {
-  return "0f1601c2-d523-4b90-beb2-0e1f600ff371";
+  return "6bd05a61-87d5-401c-8453-70eee3984beb";
 };
 
 export const getUserRole = async (id) => {

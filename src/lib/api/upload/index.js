@@ -1,16 +1,20 @@
 import prisma from "@/lib/db";
 import { HttpError } from "@/lib/api";
 
-const acceptableRoles = ["admin", "superAdmin"];
-const privilegedRole = "superAdmin";
-
-export const checkResourceAccess = (role) => {
-  if (!acceptableRoles.includes(role)) {
+export const checkResourceAccess = (role, rolePermissions) => {
+  if (!rolePermissions.authorizedRoles.includes(role)) {
     throw new HttpError("Forbidden: insufficient permissions", 403);
   }
 };
 
-export const buildWhereClause = (searchParams, role) => {
+export const searchParamsValidation = (searchParams) => {};
+
+export const buildWhereClause = (
+  searchParams,
+  userId,
+  role,
+  rolePermissions
+) => {
   // Built whereClause from searchParams
   // Acceptable params: id,  name, type, status, date, startDate, endDate, username
   const where = {};
@@ -33,9 +37,14 @@ export const buildWhereClause = (searchParams, role) => {
   if (startDate) where.date.gte = new Date(startDate);
   if (endDate) where.date.lte = new Date(endDate);
 
-  if (role === privilegedRole) {
+  if (rolePermissions.privilegedRoles.includes(role)) {
     const usernames = searchParams.getAll("username");
-    where.user.username = { in: usernames };
+    if (usernames.length > 0) {
+      where.user = {};
+      where.user.username = { in: usernames };
+    }
+  } else {
+    where.userId = userId;
   }
 
   return where;
@@ -46,9 +55,23 @@ export const buildIncludeClause = (searchParams) => {
   // Acceptable params: include
   const include = {};
 
-  const fields = searchParams.getAll("include");
-  fields.forEach((field) => {
-    include[field] = true;
+  const entries = searchParams.getAll("include");
+  entries.forEach((entry) => {
+    const parts = entry.split(".");
+
+    let current = include;
+
+    parts.forEach((part, index) => {
+      if (!current[part]) {
+        current[part] = index === parts.length - 1 ? true : { select: {} };
+      }
+      if (index < parts.length - 1) {
+        if (current[part] === true) {
+          current[part] = { select: {} };
+        }
+        current = current[part].select;
+      }
+    });
   });
 
   return include;
@@ -56,12 +79,26 @@ export const buildIncludeClause = (searchParams) => {
 
 export const buildSelectClause = (searchParams) => {
   // Built selectClause from searchParams
-  // Acceptable params: select (param OR user.param)
+  // Acceptable params: select
   const select = {};
 
-  const fields = searchParams.getAll("select");
-  fields.forEach((field) => {
-    select[field] = true;
+  const entries = searchParams.getAll("select");
+  entries.forEach((entry) => {
+    const parts = entry.split(".");
+
+    let current = select;
+
+    parts.forEach((part, index) => {
+      if (!current[part]) {
+        current[part] = index === parts.length - 1 ? true : { select: {} };
+      }
+      if (index < parts.length - 1) {
+        if (current[part] === true) {
+          current[part] = { select: {} };
+        }
+        current = current[part].select;
+      }
+    });
   });
 
   return select;
@@ -73,23 +110,19 @@ export const buildOrderByClause = (searchParams) => {
   const orderBy = [];
 
   const byFields = searchParams.getAll("orderBy");
-  byFields.forEach((byFields) => {
-    const [field, order] = byFields.split(".");
-    const orderInstance = {};
-    orderInstance[field] = order;
-    orderBy.push(orderInstance);
+  byFields.forEach((entry) => {
+    const [field, order] = entry.split(".");
+    orderBy.push({ [field]: order });
   });
 
   return orderBy;
 };
 
 export const getResources = async (where, include, select, orderBy) => {
-  const omit = { userId: true };
-
   const queryOptions = {
     where,
     orderBy,
-    ...(Object.keys(select).length > 0 ? { select } : { include, omit }),
+    ...(Object.keys(select).length > 0 ? { select } : { include }),
   };
 
   return await prisma.upload.findMany(queryOptions);
