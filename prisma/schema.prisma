@@ -36,28 +36,31 @@ enum UploadStatus {
 
 // Models
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  username     String     @unique @db.VarChar(32)
-  password     String     @db.VarChar(64)
-  role         UserRole   @default(user)
-  status       UserStatus @default(active)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  createdById  String?    @db.Uuid
-  createdBy    User?      @relation("CreatedUsers", fields: [createdById], references: [id])
-  createdUsers User[]     @relation("CreatedUsers")
-  uploads       Upload[]
+  id               String     @id @default(uuid()) @db.Uuid
+  username         String     @unique @db.VarChar(32)
+  password         String     @db.VarChar(64)
+  role             UserRole   @default(user)
+  status           UserStatus @default(active)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  createdById      String?    @db.Uuid
+  createdBy        User?      @relation("CreatedUsers", fields: [createdById], references: [id])
+  createdUsers     User[]     @relation("CreatedUsers")
+  createdUploads   Upload[]   @relation("CreatedUploads")
+  processedUploads Upload[]   @relation("ProcessedUploads")
 }
 
 model Upload {
-  id       String       @id @default(uuid()) @db.Uuid
-  name     String       @unique @db.VarChar(50)
-  date     DateTime     @default(now())
-  type     UploadType
-  status   UploadStatus @default(pending)
-  fileName String       @db.VarChar(255)
-  path     String       @unique @db.VarChar(100)
-  hash     String       @unique @db.VarChar(64)
-  userId   String       @db.Uuid
-  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique @db.VarChar(50)
+  date        DateTime     @default(now())
+  type        UploadType
+  status      UploadStatus @default(pending)
+  fileName    String       @db.VarChar(255)
+  path        String       @unique @db.VarChar(100)
+  hash        String       @unique @db.VarChar(64)
+  creatorId   String       @db.Uuid
+  creator     User         @relation("CreatedUploads", fields: [creatorId], references: [id], onDelete: Cascade)
+  processorId String?      @db.Uuid
+  processor   User?        @relation("ProcessedUploads", fields: [processorId], references: [id])
 }

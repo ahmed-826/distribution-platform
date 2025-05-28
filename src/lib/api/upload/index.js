@@ -136,29 +136,35 @@ export const getResources = async (where, include, select, orderBy) => {
 };
 
 const filterResources = (resources) => {
-  const fieldsToOmit = {
-    userId: true,
-    user: {
-      id: true,
-      password: true,
-      createdById: true,
-      createdBy: true,
-      createdUsers: true,
-    },
+  const filter = {
+    id: true,
+    name: true,
+    date: true,
+    type: true,
+    status: true,
+    fileName: true,
+    path: true,
+    hash: true,
+    creator: { username: true, role: true },
+    processor: { username: true, role: true },
   };
-  const omitFieldsRecursively = (obj, omitMap) => {
-    if (typeof obj !== "object" || obj === null) return obj;
+
+  const filterFieldsRecursively = (obj, filterMap) => {
+    if (typeof obj !== "object" || obj === null || !filterMap) return undefined;
 
     const result = Array.isArray(obj) ? [] : {};
 
-    for (const key in obj) {
-      if (!omitMap[key]) {
+    for (const key in filterMap) {
+      if (filterMap[key] === true) {
         result[key] = obj[key];
       } else if (
-        typeof omitMap[key] === "object" &&
+        typeof filterMap[key] === "object" &&
         typeof obj[key] === "object"
       ) {
-        result[key] = omitFieldsRecursively(obj[key], omitMap[key]);
+        const nested = filterFieldsRecursively(obj[key], filterMap[key]);
+        if (nested !== undefined) {
+          result[key] = nested;
+        }
       }
     }
 
@@ -166,9 +172,8 @@ const filterResources = (resources) => {
   };
 
   const filteredResources = resources.map((resource) =>
-    omitFieldsRecursively(resource, fieldsToOmit)
+    filterFieldsRecursively(resource, filter)
   );
-
   return filteredResources;
 };
 
@@ -243,7 +248,7 @@ const createResourceByFile = async (formData, userId) => {
     fileName,
     path,
     hash,
-    userId,
+    creatorId: userId,
   };
 
   await resourceTransaction(data, fileData);
@@ -315,4 +320,29 @@ const dumpConstructor = (dump, source, date) => {
   const formattedDate = DateTime.fromJSDate(date).toFormat("yyyyMMdd");
   const dumpName = `files_${source}-${formattedDate}0000`;
   return { dumpName, dumpDate: null };
+};
+
+// --- PUT ---
+
+export const ensureResourceExists = async (resourceId) => {
+  const resource = await prisma.upload.findUnique({
+    where: { id: resourceId },
+  });
+  if (!resource) {
+    throw new HttpError("Resource not found", 404);
+  }
+
+  const { creatorId } = resource;
+  return creatorId;
+};
+
+export const verifyUpdatePermission = (
+  userId,
+  creatorId,
+  role,
+  privilegedRoles
+) => {
+  if (userId !== creatorId && !privilegedRoles.includes(role)) {
+    throw new HttpError("Forbidden: insufficient permissions", 403);
+  }
 };

@@ -8,6 +8,8 @@ import {
   buildOrderByClause,
   getResources,
   createResource,
+  ensureResourceExists,
+  verifyUpdatePermission,
 } from "@/lib/api/upload";
 
 const authorizedRoles = ["admin", "superAdmin"];
@@ -90,3 +92,43 @@ export const POST = async (request) => {
     );
   }
 };
+
+export async function PUT(request) {
+  try {
+    // Get userId
+    const userId = getUserId();
+    const role = await getUserRole(userId);
+
+    // Validate user role against allowed roles; throw a 403 Forbidden error on failure
+    authorizeRole(role, authorizedRoles);
+
+    const formData = await request.formData();
+    const resourceId = formData.get("id");
+
+    // Ensures the resource exists; throws a 404 not found error on failure
+    const creatorId = await ensureResourceExists(resourceId);
+
+    // Check if the user has permission to update this resource; throw a 403 Forbidden error on failure
+    verifyUpdatePermission(userId, creatorId, role, privilegedRoles);
+
+    return NextResponse.json({
+      data: "Resource was updated successfully",
+      error: null,
+    });
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return NextResponse.json(
+        { data: null, error: { message: error.getMessage() } },
+        { status: error.getStatus() }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        data: null,
+        error: { message: "Internal server error" },
+      },
+      { status: 500 }
+    );
+  }
+}
