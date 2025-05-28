@@ -1,19 +1,17 @@
 import prisma from "@/lib/db";
 import { HttpError } from "@/lib/api";
 
-export const checkResourceAccess = (role, rolePermissions) => {
-  if (!rolePermissions.authorizedRoles.includes(role)) {
+export const checkResourceAccess = (role, authorizedRoles) => {
+  if (!authorizedRoles.includes(role)) {
     throw new HttpError("Forbidden: insufficient permissions", 403);
   }
 };
-
-export const searchParamsValidation = (searchParams) => {};
 
 export const buildWhereClause = (
   searchParams,
   userId,
   role,
-  rolePermissions
+  privilegedRoles
 ) => {
   // Built whereClause from searchParams
   // Acceptable params: id,  name, type, status, date, startDate, endDate, username
@@ -37,7 +35,7 @@ export const buildWhereClause = (
   if (startDate) where.date.gte = new Date(startDate);
   if (endDate) where.date.lte = new Date(endDate);
 
-  if (rolePermissions.privilegedRoles.includes(role)) {
+  if (privilegedRoles.includes(role)) {
     const usernames = searchParams.getAll("username");
     if (usernames.length > 0) {
       where.user = {};
@@ -125,5 +123,45 @@ export const getResources = async (where, include, select, orderBy) => {
     ...(Object.keys(select).length > 0 ? { select } : { include }),
   };
 
-  return await prisma.upload.findMany(queryOptions);
+  const resources = await prisma.upload.findMany(queryOptions);
+  const filteredResources = filterResources(resources);
+
+  return filteredResources;
+};
+
+const filterResources = (resources) => {
+  const fieldsToOmit = {
+    userId: true,
+    user: {
+      id: true,
+      password: true,
+      createdById: true,
+      createdBy: true,
+      createdUsers: true,
+    },
+  };
+  const omitFieldsRecursively = (obj, omitMap) => {
+    if (typeof obj !== "object" || obj === null) return obj;
+
+    const result = Array.isArray(obj) ? [] : {};
+
+    for (const key in obj) {
+      if (!omitMap[key]) {
+        result[key] = obj[key];
+      } else if (
+        typeof omitMap[key] === "object" &&
+        typeof obj[key] === "object"
+      ) {
+        result[key] = omitFieldsRecursively(obj[key], omitMap[key]);
+      }
+    }
+
+    return result;
+  };
+
+  const filteredResources = resources.map((resource) =>
+    omitFieldsRecursively(resource, fieldsToOmit)
+  );
+
+  return filteredResources;
 };

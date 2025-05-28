@@ -1,13 +1,5 @@
 import { PrismaClient } from "@/generated/prisma";
 
-const prisma = new PrismaClient({
-  omit: {
-    user: {
-      id: true,
-      password: true,
-    },
-    upload: { userId: true },
-  },
-});
+const prisma = new PrismaClient();
 
 export default prisma;

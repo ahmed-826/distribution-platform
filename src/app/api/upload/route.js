@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { HttpError, getUserId, getUserRole } from "@/lib/api";
 import {
   checkResourceAccess,
-  searchParamsValidation,
   buildWhereClause,
   buildIncludeClause,
   buildSelectClause,
@@ -10,10 +9,8 @@ import {
   getResources,
 } from "@/lib/api/upload";
 
-const rolePermissions = {
-  authorizedRoles: ["admin", "superAdmin"],
-  privilegedRoles: ["superAdmin"],
-};
+const authorizedRoles = ["admin", "superAdmin"];
+const privilegedRoles = ["superAdmin"];
 
 export const GET = async (request) => {
   try {
@@ -24,13 +21,10 @@ export const GET = async (request) => {
     const role = await getUserRole(userId);
 
     // Check resource access (throw Forbidden (403) error if failed)
-    checkResourceAccess(role, rolePermissions);
-
-    // SearchParams validation (throw Bad request (400) error if failed)
-    searchParamsValidation(searchParams);
+    checkResourceAccess(role, authorizedRoles);
 
     // Build whereClause
-    const where = buildWhereClause(searchParams, userId, role, rolePermissions);
+    const where = buildWhereClause(searchParams, userId, role, privilegedRoles);
 
     // Build includeClause
     const include = buildIncludeClause(searchParams);
@@ -55,7 +49,7 @@ export const GET = async (request) => {
     return NextResponse.json(
       {
         data: null,
-        error: { message: "Internal server error" + error.message },
+        error: { message: "Internal server error" },
       },
       { status: 500 }
     );
