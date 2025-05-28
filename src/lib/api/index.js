@@ -1,4 +1,5 @@
 import prisma from "@/lib/db";
+import crypto from "crypto";
 
 export class HttpError extends Error {
   constructor(message, status) {
@@ -23,4 +24,8 @@ export const getUserId = () => {
 export const getUserRole = async (id) => {
   const { role } = await prisma.user.findUnique({ where: { id } });
   return role;
+};
+
+export const calculateFileHash = (fileData) => {
+  return crypto.createHash("sha256").update(fileData).digest("hex");
 };

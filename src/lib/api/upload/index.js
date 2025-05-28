@@ -1,12 +1,18 @@
 import prisma from "@/lib/db";
-import { HttpError } from "@/lib/api";
+import { HttpError, calculateFileHash } from "@/lib/api";
+import fs from "fs/promises";
+import * as pathLib from "path";
+import { DateTime } from "luxon";
 
-export const checkResourceAccess = (role, authorizedRoles) => {
+const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
+
+export const authorizeRole = (role, authorizedRoles) => {
   if (!authorizedRoles.includes(role)) {
     throw new HttpError("Forbidden: insufficient permissions", 403);
   }
 };
 
+// --- GET ---
 export const buildWhereClause = (
   searchParams,
   userId,
@@ -164,4 +170,149 @@ const filterResources = (resources) => {
   );
 
   return filteredResources;
+};
+
+// --- POST ---
+export const createResource = async (formData, userId) => {
+  const type = formDataValidation(formData);
+  if (type === "form") await createResourceByForm(formData, userId);
+  else await createResourceByFile(formData, userId);
+};
+
+const formDataValidation = (formData) => {
+  const type = formData.get("type");
+  const file = formData.get("file");
+  const source = formData.get("source");
+  const object = formData.get("object");
+  const summary = formData.get("summary");
+  const documents = formData.getAll("documents");
+
+  const typeOptions = ["file", "api", "form"];
+  const byFileTypes = ["file", "api"];
+  const byFormTypes = ["form"];
+
+  const acceptableFileTypes = [
+    "application/zip",
+    "application/x-zip-compressed",
+  ];
+
+  if (
+    !typeOptions.includes(type) ||
+    (byFileTypes.includes(type) &&
+      (!file || !acceptableFileTypes.includes(file.type))) ||
+    (byFormTypes.includes(type) &&
+      (!source || !object || !summary || documents.length === 0))
+  ) {
+    throw new HttpError("Bad request", 400);
+  }
+  return type;
+};
+
+const createResourceByFile = async (formData, userId) => {
+  const type = formData.get("type");
+  const file = formData.get("file");
+
+  const fileData = Buffer.from(await file.arrayBuffer());
+
+  const hash = calculateFileHash(fileData);
+  await prisma.upload.findUnique({ where: { hash } }).then((resource) => {
+    if (resource) throw new HttpError("Resource already exists", 409);
+  });
+
+  const fileName = file.name;
+
+  const date = new Date();
+  const formatDate = DateTime.fromJSDate(date).setLocale("fr");
+  const formatDateForName = formatDate.toFormat("ddMMMMyyyy");
+  const formatDateForPath = formatDate.toFormat("yyyyMMdd");
+
+  const rank = await getRank(formatDateForName);
+
+  const name = `${formatDateForName}-${type}-${rank}`;
+  const path = pathLib.join(
+    "data",
+    "uploads",
+    formatDateForPath,
+    `${rank} - ${type} - ${fileName}`
+  );
+
+  const data = {
+    name,
+    date,
+    type,
+    fileName,
+    path,
+    hash,
+    userId,
+  };
+
+  await resourceTransaction(data, fileData);
+};
+
+const createResourceByForm = async (formData, userId) => {
+  const type = formData.get("type");
+
+  const source = formData.get("source");
+  const object = formData.get("object");
+  const summary = formData.get("summary");
+  const documents = formData.getAll("documents");
+
+  const date = new Date();
+  const date_generate = DateTime.fromJSDate(date).toFormat(
+    "yyyy/MM/dd HH:mm:ss"
+  );
+  let dump = formData.get("dump");
+  const { dumpName, dumpDate } = dumpConstructor(dump, source, date);
+
+  const jsonObject = {
+    index: dumpName,
+    summary,
+    object,
+    date_generate,
+    source: { name: source, date_collect: dumpDate },
+    files: documents.map((document) => ({
+      type: document.name,
+      original: {
+        filename: document.name,
+      },
+    })),
+  };
+};
+
+const getRank = async (startsWith) => {
+  const previousRank = await prisma.upload.count({
+    where: { name: { startsWith } },
+  });
+  return previousRank + 1;
+};
+
+const resourceTransaction = async (data, fileData) => {
+  await prisma.$transaction(async (prisma) => {
+    await prisma.upload.create({ data });
+
+    const absolutePath = pathLib.join(FILE_STORAGE_PATH, data.path);
+    const dirPath = pathLib.dirname(absolutePath);
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(absolutePath, fileData);
+  });
+};
+
+const dumpConstructor = (dump, source, date) => {
+  if (dump) {
+    const [prefix, rest] = dump.split("_");
+    if (prefix === "files" && rest) {
+      const [sourceToValidate, suffix] = rest.split("-");
+      if (sourceToValidate === source && suffix) {
+        const datePart = DateTime.fromFormat(suffix.slice(0, 8), "yyyyMMdd");
+        const digitPart = suffix.slice(8);
+        if (datePart.isValid && /^\d+$/.test(digitPart)) {
+          return { dumpName: dump, dumpDate: datePart.toFormat("yyyy/MM/dd") };
+        }
+      }
+    }
+  }
+
+  const formattedDate = DateTime.fromJSDate(date).toFormat("yyyyMMdd");
+  const dumpName = `files_${source}-${formattedDate}0000`;
+  return { dumpName, dumpDate: null };
 };
