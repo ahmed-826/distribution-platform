@@ -34,6 +34,18 @@ enum UploadStatus {
   failed
 }
 
+enum FicheStatus {
+  valid
+  suspended
+  canceled
+}
+
+enum DocumentType {
+  File
+  Message
+  Attachment
+}
+
 // Models
 model User {
   id               String     @id @default(uuid()) @db.Uuid
@@ -63,4 +75,48 @@ model Upload {
   creator     User         @relation("CreatedUploads", fields: [creatorId], references: [id], onDelete: Cascade)
   processorId String?      @db.Uuid
   processor   User?        @relation("ProcessedUploads", fields: [processorId], references: [id])
+  Fiche       Fiche[]
+}
+
+model Source {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique @db.VarChar(30)
+  description String?
+  fiches      Fiche[]
+}
+
+model Fiche {
+  id             String      @id @default(uuid()) @db.Uuid
+  ref            String      @unique @db.VarChar(32)
+  sourceId       String      @db.Uuid
+  source         Source      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  date           DateTime    @default(now())
+  object         String
+  summary        String
+  createdBy      String?
+  dateDistribute DateTime?
+  path           String      @unique
+  hash           String      @unique @db.VarChar(64)
+  status         FicheStatus @default(suspended)
+  dump           String?     @db.VarChar(50)
+  uploadId       String      @db.Uuid
+  upload         Upload      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  documents      Document[]
+}
+
+model Document {
+  id           String       @id @default(uuid()) @db.Uuid
+  type         DocumentType
+  content      String?
+  meta         Json?
+  fileName     String
+  path         String       @unique
+  originalPath String?
+  dumpInfo     Json?
+  hash         String       @unique @db.VarChar(64)
+  ficheId      String?      @db.Uuid
+  fiche        Fiche?       @relation(fields: [ficheId], references: [id], onDelete: Cascade)
+  messageId    String?      @db.Uuid
+  message      Document?    @relation("Attachments", fields: [messageId], references: [id], onDelete: Cascade)
+  attachments  Document[]   @relation("Attachments")
 }

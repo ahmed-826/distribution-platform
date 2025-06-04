@@ -8,8 +8,7 @@ import {
   buildOrderByClause,
   getResources,
   createResource,
-  ensureResourceExists,
-  verifyUpdatePermission,
+  updateResource,
 } from "@/lib/api/upload";
 
 const authorizedRoles = ["admin", "superAdmin"];
@@ -103,13 +102,7 @@ export async function PUT(request) {
     authorizeRole(role, authorizedRoles);
 
     const formData = await request.formData();
-    const resourceId = formData.get("id");
-
-    // Ensures the resource exists; throws a 404 not found error on failure
-    const creatorId = await ensureResourceExists(resourceId);
-
-    // Check if the user has permission to update this resource; throw a 403 Forbidden error on failure
-    verifyUpdatePermission(userId, creatorId, role, privilegedRoles);
+    await updateResource(formData, userId, role, privilegedRoles);
 
     return NextResponse.json({
       data: "Resource was updated successfully",
@@ -126,7 +119,7 @@ export async function PUT(request) {
     return NextResponse.json(
       {
         data: null,
-        error: { message: "Internal server error" },
+        error: { message: "Internal server error >>> " + error.message },
       },
       { status: 500 }
     );

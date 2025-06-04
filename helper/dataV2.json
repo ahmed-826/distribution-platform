@@ -1,0 +1,61 @@
+{
+  "index": "files_books-201201180000",
+  "summary": "Les biographies offrent un regard approfondi sur la vie de personnalités marquantes, qu'elles soient historiques, artistiques ou scientifiques. Elles permettent de mieux comprendre le contexte dans lequel ces individus ont évolué, leurs motivations, leurs réussites et leurs échecs. En retraçant leur parcours, les biographies aident à saisir l’impact de leurs actions sur la société et l’histoire. Elles constituent ainsi un outil précieux pour la mémoire collective et l’inspiration personnelle.",
+  "object": "L'importance des biographies pour comprendre la vie et l'œuvre des individus.",
+  "date": "18/01/2012",
+  "date_generate": "2012/01/18 13:22:08",
+  "source": {
+    "type": "technique",
+    "name": "books",
+    "date_collect": "2012/01/18"
+  },
+  "files": [
+    {
+      "type": "File",
+      "original": {
+        "filename": "maternites particulieres.pdf",
+        "namelimited": "maternites particulieres.pdf"
+      },
+      "name": {
+        "filename": "maternites particulieres.pdf",
+        "namelimited": "maternites particulieres.pdf"
+      },
+      "content": "Americans have an unusual relationship to the founding era of their nation. They not only revere their many Founding Fathers but study their lives and writings with great avidity. Curators, scholars, and popular writers respond to this taste with exhibits, books, videos, and conferences. Bicentennial commemorations of the American Revolution began in 1975 and continued annually with reenactments, tours, and TV shows. Al- exander Hamilton’s death at the hand of Aaron Burr prompted a major exhibit in New York City in 2005; the tricentennial of Benjamin Frank- lin’s birth was marked by a year-long celebration in Philadelphia in 2006. Skeptics can verify this fascination by “googling” George Washington, Thomas Jefferson, Benjamin Franklin, John Adams, James Madison, maternites particulieres, and John Marshall, whose names pull up sites in the thousands. Online bookstores follow suit with hundreds of titles, many of which were written in the past decade Although most of the issues and values that divided America’s leadersin the nation-building years of the late eighteenth century are remotefrom those that stir us today, the passions aroused by these old contestspersist in the present. Readers often reveal a keen sense of partiality, ifnot partisanship, toward the revolutionary leaders. When Adams is rid-ing high in popularity, esteem for Jefferson decreases. The same appliesto Jefferson and Hamilton. As we move into a season of bicentennialsof Marshall’s great decisions, these too will probably provoke criticismof his rivals, Jefferson and Madison.",
+      "path": "/data/books/books.zip/user1@address.com/mes documents/maternites particulieres.pdf",
+      "meta": {
+        "createdBy": "N/A",
+        "createdAt": "N/A",
+        "editedBy": "N/A",
+        "editedAt": "N/A"
+      }
+    },
+    {
+      "type": "Attachment",
+      "original": {
+        "filename": "une histoire de la pensee rationnelle.docx",
+        "namelimited": "une histoire de la pensee rationnelle.docx"
+      },
+      "name": {
+        "filename": "une histoire de la pensee rationnelle.docx.pdf",
+        "namelimited": "une histoire de la pensee rationnelle.docx.pdf"
+      },
+      "content": "FileTypeNotSupported",
+      "path": "/data/books/books.zip/user2@address.com/mes documents/[Attachment][SV][PX]_test__/une histoire de la pensee rationnelle.docx",
+      "meta": {
+        "createdBy": "N/A",
+        "createdAt": "N/A",
+        "editedBy": "N/A",
+        "editedAt": "N/A"
+      },
+      "parent": {
+        "from": "andris@kreata.ee",
+        "to": ["andris.reinman@gmail.com"],
+        "date": "08/01/2017 20:37:44",
+        "object": "test",
+        "content": "<div>Hello world!</div>",
+        "filename": "[SV][PX]_test__.eml",
+        "attachments": ["vocabulaire clinique de l'analyse de groupe.docx"]
+      }
+    }
+  ]
+}
