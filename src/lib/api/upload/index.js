@@ -3,190 +3,69 @@ import { HttpError, calculateFileHash } from "@/lib/api";
 import fs from "fs/promises";
 import * as pathLib from "path";
 import { DateTime } from "luxon";
-import { fileTypeFromBuffer } from "file-type";
 import JSZip from "jszip";
 
 const FILE_STORAGE_PATH = process.env.FILE_STORAGE_PATH;
 
-export const authorizeRole = (role, authorizedRoles) => {
-  if (!authorizedRoles.includes(role)) {
-    throw new HttpError("Forbidden: insufficient permissions", 403);
-  }
-};
-
 // --- GET ---
-export const buildWhereClause = (
-  searchParams,
-  userId,
-  role,
-  privilegedRoles
-) => {
-  // Built whereClause from searchParams
-  // Acceptable params: id,  name, type, status, date, startDate, endDate, username
+export const getResources = async (searchParams, userId, permissions) => {
   const where = {};
 
   const ids = searchParams.getAll("id");
-  const names = searchParams.getAll("name");
-  const types = searchParams.getAll("type");
-  const statutes = searchParams.getAll("status");
-  const dates = searchParams.getAll("date");
-  const startDate = searchParams.get("startDate");
-  const endDate = searchParams.get("endDate");
-
   if (ids.length > 0) where.id = { in: ids };
-  if (names.length > 0) where.name = { in: names };
-  if (types.length > 0) where.type = { in: types };
-  if (statutes.length > 0) where.status = { in: statutes };
 
-  where.date = {};
-  if (dates.length > 0) where.date.in = dates.map((date) => new Date(date));
-  if (startDate) where.date.gte = new Date(startDate);
-  if (endDate) where.date.lte = new Date(endDate);
-
-  if (privilegedRoles.includes(role)) {
+  if (permissions.includes("CAN_GET_ALL_UPLOADS")) {
     const usernames = searchParams.getAll("username");
     if (usernames.length > 0) {
-      where.user = {};
-      where.user.username = { in: usernames };
+      where.user = { ["username"]: { in: usernames } };
     }
-  } else {
+  } else if (permissions.includes("CAN_GET_OWN_UPLOADS")) {
     where.userId = userId;
+  } else {
+    throw new HttpError("Forbidden: insufficient permissions", 403);
   }
 
-  return where;
-};
-
-export const buildIncludeClause = (searchParams) => {
-  // Built includeClause from searchParams
-  // Acceptable params: include
-  const include = {};
-
-  const entries = searchParams.getAll("include");
-  entries.forEach((entry) => {
-    const parts = entry.split(".");
-
-    let current = include;
-
-    parts.forEach((part, index) => {
-      if (!current[part]) {
-        current[part] = index === parts.length - 1 ? true : { select: {} };
-      }
-      if (index < parts.length - 1) {
-        if (current[part] === true) {
-          current[part] = { select: {} };
-        }
-        current = current[part].select;
-      }
-    });
-  });
-
-  return include;
-};
-
-export const buildSelectClause = (searchParams) => {
-  // Built selectClause from searchParams
-  // Acceptable params: select
-  const select = {};
-
-  const entries = searchParams.getAll("select");
-  entries.forEach((entry) => {
-    const parts = entry.split(".");
-
-    let current = select;
-
-    parts.forEach((part, index) => {
-      if (!current[part]) {
-        current[part] = index === parts.length - 1 ? true : { select: {} };
-      }
-      if (index < parts.length - 1) {
-        if (current[part] === true) {
-          current[part] = { select: {} };
-        }
-        current = current[part].select;
-      }
-    });
-  });
-
-  return select;
-};
-
-export const buildOrderByClause = (searchParams) => {
-  // Built orderBy from searchParams
-  // Acceptable params: orderBy
-  const orderBy = [];
-
-  const byFields = searchParams.getAll("orderBy");
-  byFields.forEach((entry) => {
-    const [field, order] = entry.split(".");
-    orderBy.push({ [field]: order });
-  });
-
-  return orderBy;
-};
-
-export const getResources = async (where, include, select, orderBy) => {
-  const queryOptions = {
+  const resources = await prisma.upload.findMany({
     where,
-    orderBy,
-    ...(Object.keys(select).length > 0 ? { select } : { include }),
-  };
+    orderBy: { date: "desc" },
+    omit: { userId: true },
+    include: {
+      user: { select: { username: true, role: true } },
+      fiches: true,
+    },
+  });
 
-  const resources = await prisma.upload.findMany(queryOptions);
-  const filteredResources = filterResources(resources);
-
-  return filteredResources;
-};
-
-const filterResources = (resources) => {
-  const filter = {
-    id: true,
-    name: true,
-    date: true,
-    type: true,
-    status: true,
-    fileName: true,
-    path: true,
-    hash: true,
-    creator: { username: true, role: true },
-    processor: { username: true, role: true },
-  };
-
-  const filterFieldsRecursively = (obj, filterMap) => {
-    if (typeof obj !== "object" || obj === null || !filterMap) return undefined;
-
-    const result = Array.isArray(obj) ? [] : {};
-
-    for (const key in filterMap) {
-      if (filterMap[key] === true) {
-        result[key] = obj[key];
-      } else if (
-        typeof filterMap[key] === "object" &&
-        typeof obj[key] === "object"
-      ) {
-        const nested = filterFieldsRecursively(obj[key], filterMap[key]);
-        if (nested !== undefined) {
-          result[key] = nested;
-        }
-      }
-    }
-
-    return result;
-  };
-
-  const filteredResources = resources.map((resource) =>
-    filterFieldsRecursively(resource, filter)
-  );
-  return filteredResources;
+  return resources;
 };
 
 // --- POST ---
-export const createResource = async (formData, userId) => {
-  const type = formDataValidation(formData);
-  if (type === "form") await createResourceByForm(formData, userId);
-  else await createResourceByFile(formData, userId);
+export const createResource = async (formData, userId, permissions) => {
+  const byFileTypes = ["file", "api"];
+  const byFormTypes = ["form"];
+
+  const type = formDataValidation(formData, byFileTypes, byFormTypes);
+
+  const byFile = byFileTypes.includes(type);
+  const byForm = byFormTypes.includes(type);
+
+  const canCreateUploadsByFile = [
+    "CAN_CREATE_UPLOADS",
+    "CAN_CREATE_UPLOAD_BY_FILE",
+  ].some((p) => permissions.includes(p));
+  const canCreateUploadsByForm = [
+    "CAN_CREATE_UPLOADS",
+    "CAN_CREATE_UPLOAD_BY_FORM",
+  ].some((p) => permissions.includes(p));
+
+  if (byFile && canCreateUploadsByFile) {
+    return await createResourceByFile(formData, userId);
+  } else if (byForm && canCreateUploadsByForm) {
+    return await createResourceByForm(formData, userId);
+  }
+  throw new HttpError("Forbidden: insufficient permissions", 403);
 };
 
-const formDataValidation = (formData) => {
+const formDataValidation = (formData, byFileTypes, byFormTypes) => {
   const type = formData.get("type");
   const file = formData.get("file");
   const source = formData.get("source");
@@ -194,17 +73,14 @@ const formDataValidation = (formData) => {
   const summary = formData.get("summary");
   const documents = formData.getAll("documents");
 
-  const typeOptions = ["file", "api", "form"];
-  const byFileTypes = ["file", "api"];
-  const byFormTypes = ["form"];
-
+  const acceptableTypes = [...byFileTypes, ...byFormTypes];
   const acceptableFileTypes = [
     "application/zip",
     "application/x-zip-compressed",
   ];
 
   if (
-    !typeOptions.includes(type) ||
+    !acceptableTypes.includes(type) ||
     (byFileTypes.includes(type) &&
       (!file || !acceptableFileTypes.includes(file.type))) ||
     (byFormTypes.includes(type) &&
@@ -222,9 +98,8 @@ const createResourceByFile = async (formData, userId) => {
   const fileData = Buffer.from(await file.arrayBuffer());
 
   const hash = calculateFileHash(fileData);
-  await prisma.upload.findUnique({ where: { hash } }).then((resource) => {
-    if (resource) throw new HttpError("Resource already exists", 409);
-  });
+  const resource = await prisma.upload.findUnique({ where: { hash } });
+  if (resource) throw new HttpError("Resource already exists", 409);
 
   const fileName = file.name;
 
@@ -250,10 +125,10 @@ const createResourceByFile = async (formData, userId) => {
     fileName,
     path,
     hash,
-    creatorId: userId,
+    userId,
   };
 
-  await resourceTransaction(data, fileData);
+  return await resourceTransaction(data, fileData);
 };
 
 const createResourceByForm = async (formData, userId) => {
@@ -294,13 +169,15 @@ const getRank = async (startsWith) => {
 };
 
 const resourceTransaction = async (data, fileData) => {
-  await prisma.$transaction(async (prisma) => {
-    await prisma.upload.create({ data });
+  return await prisma.$transaction(async (prisma) => {
+    const { id } = await prisma.upload.create({ data });
 
     const absolutePath = pathLib.join(FILE_STORAGE_PATH, data.path);
     const dirPath = pathLib.dirname(absolutePath);
     await fs.mkdir(dirPath, { recursive: true });
     await fs.writeFile(absolutePath, fileData);
+
+    return id;
   });
 };
 
@@ -325,58 +202,45 @@ const dumpConstructor = (dump, source, date) => {
 };
 
 // --- PUT ---
-export const updateResource = async (
-  formData,
-  userId,
-  role,
-  privilegedRoles
-) => {
+export const updateResource = async (formData, userId, isPrivileged) => {
   const resourceId = formData.get("id");
 
-  // Ensures the resource exists; throws a 404 not found error on failure
-  const creatorId = await ensureResourceExists(resourceId);
+  const where = { id: resourceId };
+  if (!isPrivileged) where.userId = userId;
 
-  // Check if the user has permission to update this resource; throw a 403 Forbidden error on failure
-  if (userId !== creatorId && !privilegedRoles.includes(role)) {
-    throw new HttpError("Forbidden: insufficient permissions", 403);
-  }
+  const resource = await prisma.upload.findUnique({ where });
+  if (!resource) throw new HttpError("Resource not found", 404);
 
   const action = formData.get("action");
-  if (action === "process") await processResource(resourceId, userId);
+  if (action === "process") return await processResource(resourceId, userId);
   else throw new HttpError("Bad request", 404);
 };
 
-const ensureResourceExists = async (id) => {
-  const { creatorId } = await prisma.upload
-    .findUnique({ where: { id } })
-    .then((resource) => {
-      if (!resource) {
-        throw new HttpError("Resource not found", 404);
-      }
-      return resource;
-    });
-  return creatorId;
-};
-
-const processResource = async (resourceId, processorId) => {
+const processResource = async (id, userId) => {
   try {
-    await updateResourceFields(resourceId, { status: "processing" });
+    await prisma.upload.update({
+      where: { id },
+      data: { status: "processing" },
+    });
 
     const fileBuffer = await validateAndGetResource(resourceId);
 
     await processZipFile(fileBuffer, resourceId);
 
-    await updateResourceFields(resourceId, {
+    await updateResourceRecord(resourceId, {
       status: "completed",
-      processorId,
+      userId,
     });
   } catch (error) {
-    await updateResourceFields(resourceId, { status: "failed" });
+    await prisma.upload.update({
+      where: { id },
+      data: { status: "failed" },
+    });
     throw error;
   }
 };
 
-const updateResourceFields = async (id, data) => {
+const updateResourceRecord = async (id, data) => {
   const resource = await prisma.upload.update({ where: { id }, data });
   return resource;
 };
@@ -418,13 +282,15 @@ const getFilePathsOfFolder = (folder, filePaths) => {
 const processFolder = async (zipObject, pathsOfFolder, resourceId) => {
   const { principalFilePaths: filePaths } = pathsOfFolder;
   // Process product
-  await processProduct(zipObject, pathsOfFolder, resourceId); //.catch(() => {});
+  await processProduct(zipObject, pathsOfFolder, resourceId).catch((error) => {
+    console.error(error.message);
+  });
 
   // Process nested zip files
   const zipFilePaths = filePaths.filter((path) => path.endsWith(".zip"));
   for (const zipFilePath of zipFilePaths) {
     const fileBuffer = await zipObject.file(zipFilePath).async("arraybuffer");
-    await processZipFile(fileBuffer, resourceId); //.catch(() => {});
+    await processZipFile(fileBuffer, resourceId).catch(() => {});
   }
 };
 
@@ -765,4 +631,47 @@ const saveFiles = async (bufferPathMapping) => {
     await fs.mkdir(dirPath, { recursive: true });
     await fs.writeFile(absolutePath, buffer);
   }
+};
+
+// --- DELETE ---
+
+export const deleteResources = async (
+  resourceIds,
+  userId,
+  role,
+  privilegedRoles
+) => {
+  const deletedResourceIds = [];
+
+  for (const id of resourceIds) {
+    const where = { id };
+    if (!privilegedRoles.includes(role)) where.creatorId = userId;
+
+    await prisma
+      .$transaction(async (prisma) => {
+        const paths = await prisma.upload.findUnique({
+          where,
+          select: { path: true, fiches: { select: { path: true } } },
+        });
+        await prisma.upload.delete({ where }).catch(() => {});
+
+        const resourcePath = pathLib.join(FILE_STORAGE_PATH, paths.path);
+        const ficheDirPaths = paths.fiches.map((fiche) =>
+          pathLib.dirname(pathLib.join(FILE_STORAGE_PATH, fiche.path))
+        );
+
+        await fs.rm(resourcePath);
+        await fs.rmdir(pathLib.dirname(resourcePath)).catch(() => {});
+
+        for (const dirPath of ficheDirPaths) {
+          await fs.rm(dirPath, { recursive: true });
+          await fs.rmdir(pathLib.dirname(dirPath)).catch(() => {});
+        }
+
+        deletedResourceIds.push(id);
+      })
+      .catch(() => {});
+  }
+
+  return deletedResourceIds;
 };

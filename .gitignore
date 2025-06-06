@@ -7,7 +7,6 @@
 # production
 /build
 
-# env
-.env
+
 
 /src/generated/prisma

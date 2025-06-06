@@ -48,75 +48,93 @@ enum DocumentType {
 
 // Models
 model User {
-  id               String     @id @default(uuid()) @db.Uuid
-  username         String     @unique @db.VarChar(32)
-  password         String     @db.VarChar(64)
-  role             UserRole   @default(user)
-  status           UserStatus @default(active)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  createdById      String?    @db.Uuid
-  createdBy        User?      @relation("CreatedUsers", fields: [createdById], references: [id])
-  createdUsers     User[]     @relation("CreatedUsers")
-  createdUploads   Upload[]   @relation("CreatedUploads")
-  processedUploads Upload[]   @relation("ProcessedUploads")
+  id        String     @id @default(uuid()) @db.Uuid
+  username  String     @unique @db.VarChar(32)
+  password  String     @db.VarChar(64)
+  role      UserRole   @default(user)
+  status    UserStatus @default(active)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  createdBy String?    @db.Uuid
+  groupId   String?    @db.Uuid
+
+  permissions Permission[] @relation("UserPermissions")
+  group       Group?       @relation("UserGroup", fields: [groupId], references: [id], onDelete: SetNull)
+  uploads     Upload[]     @relation("UserUploads")
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+
+  users User[] @relation("UserPermissions")
 }
 
 model Upload {
   id          String       @id @default(uuid()) @db.Uuid
-  name        String       @unique @db.VarChar(50)
+  displayName String       @unique @db.VarChar(50)
   date        DateTime     @default(now())
   type        UploadType
   status      UploadStatus @default(pending)
   fileName    String       @db.VarChar(255)
   path        String       @unique @db.VarChar(100)
   hash        String       @unique @db.VarChar(64)
-  creatorId   String       @db.Uuid
-  creator     User         @relation("CreatedUploads", fields: [creatorId], references: [id], onDelete: Cascade)
-  processorId String?      @db.Uuid
-  processor   User?        @relation("ProcessedUploads", fields: [processorId], references: [id])
-  Fiche       Fiche[]
+  userId      String       @db.Uuid
+
+  user   User    @relation("UserUploads", fields: [userId], references: [id], onDelete: Cascade)
+  fiches Fiche[] @relation("UploadFiches")
 }
 
 model Source {
   id          String  @id @default(uuid()) @db.Uuid
   name        String  @unique @db.VarChar(30)
   description String?
-  fiches      Fiche[]
+
+  fiches Fiche[] @relation("SourceFiches")
+  groups Group[] @relation("GroupSources")
 }
 
 model Fiche {
   id             String      @id @default(uuid()) @db.Uuid
   ref            String      @unique @db.VarChar(32)
   sourceId       String      @db.Uuid
-  source         Source      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   date           DateTime    @default(now())
   object         String
   summary        String
   createdBy      String?
   dateDistribute DateTime?
+  status         FicheStatus @default(suspended)
   path           String      @unique
   hash           String      @unique @db.VarChar(64)
-  status         FicheStatus @default(suspended)
-  dump           String?     @db.VarChar(50)
   uploadId       String      @db.Uuid
-  upload         Upload      @relation(fields: [uploadId], references: [id], onDelete: Cascade)
-  documents      Document[]
+  dump           String?     @db.VarChar(50)
+
+  source    Source     @relation("SourceFiches", fields: [sourceId], references: [id], onDelete: Cascade)
+  upload    Upload     @relation("UploadFiches", fields: [uploadId], references: [id], onDelete: Cascade)
+  documents Document[] @relation("FicheDocuments")
 }
 
 model Document {
-  id           String       @id @default(uuid()) @db.Uuid
-  type         DocumentType
-  content      String?
-  meta         Json?
-  fileName     String
-  path         String       @unique
-  originalPath String?
-  dumpInfo     Json?
-  hash         String       @unique @db.VarChar(64)
-  ficheId      String?      @db.Uuid
-  fiche        Fiche?       @relation(fields: [ficheId], references: [id], onDelete: Cascade)
-  messageId    String?      @db.Uuid
-  message      Document?    @relation("Attachments", fields: [messageId], references: [id], onDelete: Cascade)
-  attachments  Document[]   @relation("Attachments")
+  id       String       @id @default(uuid()) @db.Uuid
+  type     DocumentType
+  ficheId  String       @db.Uuid
+  fileName String
+  path     String       @unique
+  hash     String       @unique @db.VarChar(64)
+  origin   Json?
+
+  content  String?
+  dumpInfo Json?
+  meta     Json?
+
+  fiche Fiche @relation("FicheDocuments", fields: [ficheId], references: [id], onDelete: Cascade)
+}
+
+model Group {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  users   User[]   @relation("UserGroup")
+  sources Source[] @relation("GroupSources")
 }

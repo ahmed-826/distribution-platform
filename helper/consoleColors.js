@@ -28,6 +28,6 @@ const colors = {
   bgWhite: "\x1b[47m",
 };
 
-// Usage
-console.log(`${colors.red}This text is red!${colors.reset}`);
-console.log(`${colors.bgGreen}${colors.black}Green background!${colors.reset}`);
+exports.consoleLog = (string, attribute) => {
+  console.log(`${colors[attribute]}${string}${colors.reset}`);
+};

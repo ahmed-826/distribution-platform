@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import crypto from "crypto";
 
@@ -17,13 +18,34 @@ export class HttpError extends Error {
   }
 }
 
-export const getUserId = () => {
-  return "b68d0a1c-0098-4bce-8498-bef23be977e9";
+export const formatErrorResponse = (error) => {
+  if (error instanceof HttpError) {
+    return NextResponse.json(
+      { data: null, error: { message: error.getMessage() } },
+      { status: error.getStatus() }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      data: null,
+      error: { message: "Internal server error" + " ---> " + error.message },
+    },
+    { status: 500 }
+  );
 };
 
-export const getUserRole = async (id) => {
-  const { role } = await prisma.user.findUnique({ where: { id } });
-  return role;
+export const getUser = async () => {
+  const id = "c478b7bb-002b-407c-b69a-fcc060724559";
+  const user = await prisma.user.findUnique({
+    where: { id },
+    include: { permissions: { select: { name: true } } },
+  });
+
+  const userId = user.id;
+  const permissions = user.permissions.map((p) => p.name);
+
+  return { userId, permissions };
 };
 
 export const calculateFileHash = (fileData) => {
